@@ -132,7 +132,7 @@ async def on_message(message):
             cur.execute('INSERT INTO users VALUES(?,0,1,0)', (message.author.id,))
 
 
-@bot.command(pass_context=True, name='leaders')
+@client.command(pass_context=True, name='leaders')
 async def leaders(ctx):
     try:
         # say top X list of positive vibe users
@@ -143,7 +143,7 @@ async def leaders(ctx):
         pass
 
 
-@bot.command(pass_context=True, name='losers')
+@client.command(pass_context=True, name='losers')
 async def losers(ctx):
     try:
         # say top X list of negative vibe users
