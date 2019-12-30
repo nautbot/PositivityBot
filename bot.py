@@ -12,10 +12,10 @@ with open('settings.json') as settings_file:
     settings = json.load(settings_file)
 
 sql = sqlite3.connect('sql.db')
-log_event('Loaded SQL Database')
+print('Loaded SQL Database')
 cur = sql.cursor()
 cur.execute('CREATE TABLE IF NOT EXISTS users(id INTEGER, positive INTEGER, neutral INTEGER, negative INTEGER)')
-log_event('Loaded Users')
+print('Loaded Users')
 sql.commit()
 
 username = settings["discord"]["description"]
