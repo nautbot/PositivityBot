@@ -106,7 +106,7 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    analysis = TextBlob(self.clean_tweet(tweet))
+    analysis = TextBlob(message.content)
 
     cur.execute('SELECT count(*) as user FROM users WHERE id=?', (message.author.id,))
     user = cur.fetchone()
