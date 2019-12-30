@@ -12,4 +12,4 @@
 
 #### NLTK Corpora for TextBlob
 
-    python -m textblob.download_corpora
+    python3 -m textblob.download_corpora
