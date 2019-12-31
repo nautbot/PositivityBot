@@ -190,19 +190,19 @@ async def score(ctx):
         if not user is None:
             score = float(user[1])
             if score > 0.67:
-                await ctx.send('{0.author.mention} Your score is {1}%.  Way to be positive!'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  Way to be positive!".format(ctx.message, round(float(score)*100,2)))
             elif score > 0.33:
-                await ctx.send('{0.author.mention} Your score is {1}%.  I know you''re trying your best to be positive!'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  I know you're trying your best to be positive!".format(ctx.message, round(float(score)*100,2)))
             elif score > 0:
-                await ctx.send('{0.author.mention} Your score is {1}%.  Keep trying to be more positive!'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  Keep trying to be more positive!".format(ctx.message, round(float(score)*100,2)))
             elif score > -0.33:
-                await ctx.send('{0.author.mention} Your score is {1}%.  I know things can be rough, try looking on the bright side!'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  I know things can be rough, try looking on the bright side!".format(ctx.message, round(float(score)*100,2)))
             elif score > -0.9:
-                await ctx.send('{0.author.mention} Your score is {1}%.  Let''s turn that frown upside-down!'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  Let's turn that frown upside-down!".format(ctx.message, round(float(score)*100,2)))
             elif score > -0.9:
-                await ctx.send('{0.author.mention} Your score is {1}%.  I''m always here for you!'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  I'm always here for you!".format(ctx.message, round(float(score)*100,2)))
             else:
-                await ctx.send('{0.author.mention} Your score is {1}%.  Your negativity is dragging me down.'.format(ctx.message, round(float(score)*100,2)))
+                await ctx.send("{0.author.mention} Your score is {1}%.  Your negativity is dragging me down.".format(ctx.message, round(float(score)*100,2)))
     except Exception as e:
         print('score : ', e)
         pass
