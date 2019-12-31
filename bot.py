@@ -5,8 +5,9 @@ import json
 
 import discord
 from discord.ext import commands
+from discord.utils import get
 import sqlite3
-import textblob
+from textblob import TextBlob
 
 with open('settings.json') as settings_file:
     settings = json.load(settings_file)
@@ -92,7 +93,7 @@ async def on_ready():
     await asyncio.sleep(1)
     print("Logged in to discord.")
     try:
-        await bot.change_presence(
+        await client.change_presence(
             activity=discord.Game(name=settings["discord"]["game"]),
             status=discord.Status.online,
             afk=False)
@@ -104,32 +105,40 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    if message.author == client.user:
-        return
-    analysis = TextBlob(message.content)
+    try:
+        if message.author == client.user:
+            return
+        if not message.content.startswith(settings["discord"]["command_prefix"]):
+            analysis = TextBlob(message.content)
+            cur.execute('SELECT count(*) as user FROM users WHERE id=?', (message.author.id,))
+            user = cur.fetchone()
+            if int(user[0]) != 0:
+                if analysis.sentiment.polarity > 0:
+                    # log positive
+                    cur.execute('UPDATE users SET positive = positive + 1 WHERE id=?', (message.author.id,))
+                elif analysis.sentiment.polarity < 0:
+                    # log negative
+                    cur.execute('UPDATE users SET negative = negative + 1 WHERE id=?', (message.author.id,))
+                else:
+                    # log neutral
+                    cur.execute('UPDATE users SET neutral = neutral + 1 WHERE id=?', (message.author.id,))
+            else:
+                if analysis.sentiment.polarity > 0:
+                    # log positive
+                    cur.execute('INSERT INTO users VALUES(?,1,0,0)', (message.author.id,))
+                elif analysis.sentiment.polarity < 0:
+                    # log negative
+                    cur.execute('INSERT INTO users VALUES(?,0,0,1)', (message.author.id,))
+                else:
+                    # log neutral
+                    cur.execute('INSERT INTO users VALUES(?,0,1,0)', (message.author.id,))
+            sql.commit()
+        await client.process_commands(message)
+    except Exception as e:
+        print('on_message : ', e)
+        pass
 
-    cur.execute('SELECT count(*) as user FROM users WHERE id=?', (message.author.id,))
-    user = cur.fetchone()
-    if int(user[0]) != 0:
-        if analysis.sentiment.polarity > 0:
-            # log positive
-            cur.execute('UPDATE users SET positive = positive + 1 WHERE id=?', (message.author.id,))
-        elif analysis.sentiment.polarity < 0:
-            # log negative
-            cur.execute('UPDATE users SET negative = negative + 1 WHERE id=?', (message.author.id,))
-        else:
-            # log neutral
-            cur.execute('UPDATE users SET neutral = neutral + 1 WHERE id=?', (message.author.id,))
-    else:
-        if analysis.sentiment.polarity > 0:
-            # log positive
-            cur.execute('INSERT INTO users VALUES(?,1,0,0)', (message.author.id,))
-        elif analysis.sentiment.polarity < 0:
-            # log negative
-            cur.execute('INSERT INTO users VALUES(?,0,0,1)', (message.author.id,))
-        else:
-            # log neutral
-            cur.execute('INSERT INTO users VALUES(?,0,1,0)', (message.author.id,))
+
 
 
 @client.command(pass_context=True, name='leaders')
@@ -137,7 +146,18 @@ async def leaders(ctx):
     try:
         # say top X list of positive vibe users
         # select top X (positive + negative * -1) / total desc
-        print('positive users')
+        
+        rank = 1
+        lines = []
+        cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users ORDER BY 2 DESC LIMIT 10')
+        users = cur.fetchall()
+        for row in users:
+            user = get(client.get_all_members(), id=row[0])
+            lines.append('{0}. {1} - {2}'.format(rank, user, round(float(row[1]), 4)))
+            rank+=1
+            if rank == 10:
+                break
+        await ctx.send("\n".join(lines))
     except Exception as e:
         print('leaders : ', e)
         pass
@@ -148,7 +168,17 @@ async def losers(ctx):
     try:
         # say top X list of negative vibe users
         # select top X (positive + negative * -1) / total asc
-        print('negative users')
+        rank = 1
+        lines = []
+        cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users ORDER BY 2 ASC LIMIT 10')
+        users = cur.fetchall()
+        for row in users:
+            user = get(client.get_all_members(), id=row[0])
+            lines.append('{0}. {1} - {2}'.format(rank, user, round(float(row[1]), 4)))
+            rank+=1
+            if rank == 10:
+                break
+        await ctx.send("\n".join(lines))
     except Exception as e:
         print('losers : ', e)
         pass
