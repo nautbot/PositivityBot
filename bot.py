@@ -139,14 +139,11 @@ async def on_message(message):
         pass
 
 
-
-
 @client.command(pass_context=True, name='leaders')
 async def leaders(ctx):
     try:
         # say top X list of positive vibe users
         # select top X (positive + negative * -1) / total desc
-        
         rank = 1
         lines = []
         cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users ORDER BY 2 DESC LIMIT 10')
@@ -183,6 +180,32 @@ async def losers(ctx):
         print('losers : ', e)
         pass
 
+
+@client.command(pass_context=True, name='score')
+async def score(ctx):
+    try:
+        print(ctx.message.author.id)
+        cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users WHERE id=?', (ctx.message.author.id,))
+        user = cur.fetchone()
+        if not user is None:
+            score = float(user[1])
+            if score > 0.67:
+                await ctx.send('{0.author.mention} Your score is {1}%.  Way to be positive!'.format(ctx.message, round(float(score)*100,2)))
+            elif score > 0.33:
+                await ctx.send('{0.author.mention} Your score is {1}%.  I know you''re trying your best to be positive!'.format(ctx.message, round(float(score)*100,2)))
+            elif score > 0:
+                await ctx.send('{0.author.mention} Your score is {1}%.  Keep trying to be more positive!'.format(ctx.message, round(float(score)*100,2)))
+            elif score > -0.33:
+                await ctx.send('{0.author.mention} Your score is {1}%.  I know things can be rough, try looking on the bright side!'.format(ctx.message, round(float(score)*100,2)))
+            elif score > -0.9:
+                await ctx.send('{0.author.mention} Your score is {1}%.  Let''s turn that frown upside-down!'.format(ctx.message, round(float(score)*100,2)))
+            elif score > -0.9:
+                await ctx.send('{0.author.mention} Your score is {1}%.  I''m always here for you!'.format(ctx.message, round(float(score)*100,2)))
+            else:
+                await ctx.send('{0.author.mention} Your score is {1}%.  Your negativity is dragging me down.'.format(ctx.message, round(float(score)*100,2)))
+    except Exception as e:
+        print('score : ', e)
+        pass
 
 async def generate_reply(ctx, model):
     try:
