@@ -139,6 +139,21 @@ async def on_message(message):
         pass
 
 
+@client.command(pass_context=True, name='check')
+async def check(ctx):
+    try:
+        text = str(ctx.message.content).replace('+check','').strip()
+        analysis = TextBlob(text)
+        if analysis.sentiment.polarity > 0.33:
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  I love it!".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
+        elif analysis.sentiment.polarity < -0.33:
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  You should probably keep that to yourself.".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
+        else:
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  Very neutral".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
+    except Exception as e:
+        print('on_message : ', e)
+        pass
+
 @client.command(pass_context=True, name='leaders')
 async def leaders(ctx):
     try:
@@ -184,7 +199,6 @@ async def losers(ctx):
 @client.command(pass_context=True, name='score')
 async def score(ctx):
     try:
-        print(ctx.message.author.id)
         cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users WHERE id=?', (ctx.message.author.id,))
         user = cur.fetchone()
         if not user is None:
