@@ -147,9 +147,9 @@ async def check(ctx):
         if analysis.sentiment.polarity > 0.33:
             await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  I love it!".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
         elif analysis.sentiment.polarity < -0.33:
-            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  Very neutral".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
-        elif score > 0:
             await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  You should probably keep that to yourself.".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
+        else:
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  Very neutral".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
     except Exception as e:
         print('on_message : ', e)
         pass
