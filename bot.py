@@ -153,9 +153,9 @@ async def leaders(ctx):
         users = cur.fetchall()
         for row in users:
             user = get(client.get_all_members(), id=row[0])
-            lines.append('{0}. {1} - {2}'.format(rank, user, round(float(row[1]), 4)))
+            lines.append('{0}. {1} - {2}%'.format(rank, user, round(float(row[1]) * 100, 2)))
             rank+=1
-            if rank == 10:
+            if rank > 10:
                 break
         await ctx.send("\n".join(lines))
     except Exception as e:
@@ -174,9 +174,9 @@ async def losers(ctx):
         users = cur.fetchall()
         for row in users:
             user = get(client.get_all_members(), id=row[0])
-            lines.append('{0}. {1} - {2}'.format(rank, user, round(float(row[1]), 4)))
+            lines.append('{0}. {1} - {2}%'.format(rank, user, round(float(row[1]) * 100, 2)))
             rank+=1
-            if rank == 10:
+            if rank > 10:
                 break
         await ctx.send("\n".join(lines))
     except Exception as e:
