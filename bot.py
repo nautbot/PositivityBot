@@ -184,7 +184,6 @@ async def losers(ctx):
 @client.command(pass_context=True, name='score')
 async def score(ctx):
     try:
-        print(ctx.message.author.id)
         cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users WHERE id=?', (ctx.message.author.id,))
         user = cur.fetchone()
         if not user is None:
