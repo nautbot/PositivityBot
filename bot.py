@@ -268,6 +268,17 @@ async def opt_out(ctx):
         pass
 
 
+@client.command(pass_context=True, name='hyb')
+async def hell_yeah_brother(ctx):
+    try:
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
+        await ctx.send("{0.author.mention} Hell yeah brother!".format(ctx.message))
+    except Exception as e:
+        print('hell_yeah_brother : ', e)
+        pass
+
+
 @client.command(pass_context=True, name='reset')
 async def reset(ctx):
     try:
