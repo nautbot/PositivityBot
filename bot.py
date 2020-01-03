@@ -15,19 +15,20 @@ with open('settings.json') as settings_file:
 sql = sqlite3.connect('sql.db')
 print('Loaded SQL Database')
 cur = sql.cursor()
-cur.execute('CREATE TABLE IF NOT EXISTS users(id INTEGER, positive INTEGER, neutral INTEGER, negative INTEGER)')
+cur.execute('CREATE TABLE IF NOT EXISTS users(id INTEGER, score FLOAT, messages INTEGER, ignore BIT)')
 print('Loaded Users')
 sql.commit()
 
 username = settings["discord"]["description"]
 version = settings["discord"]["version"]
+command_prefix = settings["discord"]["command_prefix"]
+message_history = int(settings["discord"]["message_history"])
 start_time = datetime.datetime.utcnow()
 client = commands.Bot(
     command_prefix=settings["discord"]["command_prefix"],
     description=settings["discord"]["description"])
 
 print('{} - {}'.format(username, version))
-
 
 @client.command(pass_context=True, name="ping")
 async def bot_ping(ctx):
@@ -105,34 +106,26 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    # =(running score * (100 - comment count) / 100) + (message score * comment count / 100)
     try:
-        if message.author == client.user:
+        if message.author == client.user or message.author.bot:
             return
-        if not message.content.startswith(settings["discord"]["command_prefix"]):
-            analysis = TextBlob(message.content)
-            cur.execute('SELECT count(*) as user FROM users WHERE id=?', (message.author.id,))
+        if not message.content.startswith(command_prefix):
+            cur.execute('SELECT count(*), score, messages, ignore from users where id=?', (message.author.id,))
             user = cur.fetchone()
+            if int(user[0]) != 0 and int(user[3]) != 0:
+                return
+            analysis = TextBlob(message.content)
+            message_score = 0.5 + analysis.sentiment.polarity * 0.5
             if int(user[0]) != 0:
-                if analysis.sentiment.polarity > 0:
-                    # log positive
-                    cur.execute('UPDATE users SET positive = positive + 1 WHERE id=?', (message.author.id,))
-                elif analysis.sentiment.polarity < 0:
-                    # log negative
-                    cur.execute('UPDATE users SET negative = negative + 1 WHERE id=?', (message.author.id,))
-                else:
-                    # log neutral
-                    cur.execute('UPDATE users SET neutral = neutral + 1 WHERE id=?', (message.author.id,))
+                running_score = float(user[1])
+                messages = min(int(user[2]),  message_history)
+                new_score = (running_score * ((messages - 1) / messages)) + (message_score / messages)
+                cur.execute('UPDATE users SET score = ?, messages = ? WHERE id=?', (new_score, min(messages, message_history), message.author.id))
             else:
-                if analysis.sentiment.polarity > 0:
-                    # log positive
-                    cur.execute('INSERT INTO users VALUES(?,1,0,0)', (message.author.id,))
-                elif analysis.sentiment.polarity < 0:
-                    # log negative
-                    cur.execute('INSERT INTO users VALUES(?,0,0,1)', (message.author.id,))
-                else:
-                    # log neutral
-                    cur.execute('INSERT INTO users VALUES(?,0,1,0)', (message.author.id,))
+                cur.execute('INSERT INTO users VALUES(?,?,1,0)', (message.author.id, message_score))
             sql.commit()
+            cur.execute('VACUUM')
         await client.process_commands(message)
     except Exception as e:
         print('on_message : ', e)
@@ -142,26 +135,30 @@ async def on_message(message):
 @client.command(pass_context=True, name='check')
 async def check(ctx):
     try:
-        text = str(ctx.message.content).replace('+check','').strip()
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
+        text = str(ctx.message.content).replace(command_prefix + 'check', '').strip()
         analysis = TextBlob(text)
-        if analysis.sentiment.polarity > 0.33:
-            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  I love it!".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
-        elif analysis.sentiment.polarity < -0.33:
-            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  You should probably keep that to yourself.".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
+        message_score = 0.5 + analysis.sentiment.polarity * 0.5
+        if message_score > 0.67:
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  I love it!".format(ctx.message, round(float(message_score)*100,2)))
+        elif message_score < 0.33:
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  You should probably keep that to yourself.".format(ctx.message, round(float(message_score)*100,2)))
         else:
-            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  Very neutral".format(ctx.message, round(float(analysis.sentiment.polarity)*100,2)))
+            await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  Very neutral".format(ctx.message, round(float(message_score)*100,2)))
     except Exception as e:
         print('on_message : ', e)
         pass
 
+
 @client.command(pass_context=True, name='leaders')
 async def leaders(ctx):
     try:
-        # say top X list of positive vibe users
-        # select top X (positive + negative * -1) / total desc
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
         rank = 1
         lines = []
-        cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users ORDER BY 2 DESC LIMIT 10')
+        cur.execute('SELECT id, score FROM users WHERE ignore = 0 ORDER BY 2 DESC LIMIT 10')
         users = cur.fetchall()
         for row in users:
             user = get(client.get_all_members(), id=row[0])
@@ -178,11 +175,11 @@ async def leaders(ctx):
 @client.command(pass_context=True, name='losers')
 async def losers(ctx):
     try:
-        # say top X list of negative vibe users
-        # select top X (positive + negative * -1) / total asc
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
         rank = 1
         lines = []
-        cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users ORDER BY 2 ASC LIMIT 10')
+        cur.execute('SELECT id, score FROM users WHERE ignore = 0 ORDER BY 2 ASC LIMIT 10')
         users = cur.fetchall()
         for row in users:
             user = get(client.get_all_members(), id=row[0])
@@ -199,37 +196,90 @@ async def losers(ctx):
 @client.command(pass_context=True, name='score')
 async def score(ctx):
     try:
-        cur.execute('SELECT id, ((CAST(positive AS FLOAT)+CAST(negative AS FLOAT)*-1.0)/(CAST(positive AS FLOAT)+CAST(neutral AS FLOAT)+CAST(negative AS FLOAT))) as score FROM users WHERE id=?', (ctx.message.author.id,))
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
+        cur.execute('SELECT count(*), score, ignore FROM users WHERE id=?', (ctx.message.author.id,))
         user = cur.fetchone()
-        if not user is None:
+        if int(user[0]) != 0:
+            if int(user[2]) != 0:
+                await ctx.send("You opted out, I'm not tracking your positivity.")
+                return
             score = float(user[1])
-            if score > 0.67:
+            if score > 0.9:
                 await ctx.send("{0.author.mention} Your score is {1}%.  Way to be positive!".format(ctx.message, round(float(score)*100,2)))
-            elif score > 0.33:
+            elif score > 0.75:
                 await ctx.send("{0.author.mention} Your score is {1}%.  I know you're trying your best to be positive!".format(ctx.message, round(float(score)*100,2)))
-            elif score > 0:
+            elif score >= 0.5:
                 await ctx.send("{0.author.mention} Your score is {1}%.  Keep trying to be more positive!".format(ctx.message, round(float(score)*100,2)))
-            elif score > -0.33:
+            elif score > 0.4:
                 await ctx.send("{0.author.mention} Your score is {1}%.  I know things can be rough, try looking on the bright side!".format(ctx.message, round(float(score)*100,2)))
-            elif score > -0.9:
+            elif score > 0.25:
                 await ctx.send("{0.author.mention} Your score is {1}%.  Let's turn that frown upside-down!".format(ctx.message, round(float(score)*100,2)))
-            elif score > -0.9:
+            elif score > 0.1:
                 await ctx.send("{0.author.mention} Your score is {1}%.  I'm always here for you!".format(ctx.message, round(float(score)*100,2)))
             else:
                 await ctx.send("{0.author.mention} Your score is {1}%.  Your negativity is dragging me down.".format(ctx.message, round(float(score)*100,2)))
+        return
     except Exception as e:
         print('score : ', e)
         pass
 
-async def generate_reply(ctx, model):
+
+@client.command(pass_context=True, name='optin')
+async def opt_in(ctx):
     try:
-        sentence = model.make_sentence(tries=100, retain_original=False)
-        if sentence:
-            await ctx.send('{0.author.mention} {1}'.format(ctx.message, sentence))
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
+        cur.execute('SELECT count(*), ignore from users where id=?', (ctx.message.author.id,))
+        user = cur.fetchone()
+        if int(user[0]) != 0:
+            cur.execute('UPDATE users SET ignore = 0 WHERE id=?', (ctx.message.author.id,))
         else:
-            await ctx.send('{0.author.mention} {1}'.format(ctx.message, '`Unable to build text chain`'))
+            cur.execute('INSERT INTO users VALUES(?,0,0,0)', (ctx.message.author.id,))
+        sql.commit()
+        cur.execute('VACUUM')
+        await ctx.send("Hi {0.author.mention}!  Let's start being positive!".format(ctx.message))
     except Exception as e:
-        print('generate_reply : ', e)
+        print('opt_in : ', e)
+        pass
+
+
+@client.command(pass_context=True, name='optout')
+async def opt_out(ctx):
+    try:
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
+        cur.execute('SELECT count(*), ignore from users where id=?', (ctx.message.author.id,))
+        user = cur.fetchone()
+        if int(user[0]) != 0:
+            cur.execute('UPDATE users SET ignore = 1 WHERE id=?', (ctx.message.author.id,))
+        else:
+            cur.execute('INSERT INTO users VALUES(?,0,0,1)', (ctx.message.author.id,))
+        sql.commit()
+        cur.execute('VACUUM')
+        await ctx.send("Sorry to see you go, {0.author.mention}!".format(ctx.message))
+    except Exception as e:
+        print('opt_out : ', e)
+        pass
+
+
+@client.command(pass_context=True, name='reset')
+async def reset(ctx):
+    try:
+        return
+        if ctx.message.author == client.user or ctx.message.author.bot:
+            return
+        cur.execute('SELECT count(*), ignore from users where id=?', (ctx.message.author.id,))
+        user = cur.fetchone()
+        if int(user[0]) != 0:
+            cur.execute('UPDATE users SET score = 0, messages = 0 WHERE id=?', (ctx.message.author.id,))
+        else:
+            cur.execute('INSERT INTO users VALUES(?,0,0,0)', (ctx.message.author.id,))
+        sql.commit()
+        cur.execute('VACUUM')
+        await ctx.send("Okay {0.author.mention}, you have a clean slate!".format(ctx.message))
+    except Exception as e:
+        print('reset : ', e)
         pass
 
 
