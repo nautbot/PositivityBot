@@ -121,7 +121,7 @@ async def on_message(message):
                 running_score = float(user[1])
                 messages = min(int(user[2]),  message_history)
                 new_score = (running_score * ((messages - 1) / messages)) + (message_score / messages)
-                cur.execute('UPDATE users SET score = ?, messages = ? WHERE id=?', (new_score, min(messages, message_history), message.author.id))
+                cur.execute('UPDATE users SET score = ?, messages = ? WHERE id=?', (new_score, min(messages + 1, message_history), message.author.id))
             else:
                 cur.execute('INSERT INTO users VALUES(?,?,1,0)', (message.author.id, message_score))
             sql.commit()
