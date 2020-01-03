@@ -116,7 +116,10 @@ async def on_message(message):
             if int(user[0]) != 0 and int(user[3]) != 0:
                 return
             analysis = TextBlob(message.content)
-            message_score = 0.5 + analysis.sentiment.polarity * 0.5
+            if "hell yeah brother" in message.content.lower():
+                message_score = 1
+            else:
+                message_score = 0.5 + analysis.sentiment.polarity * 0.5
             if int(user[0]) != 0:
                 running_score = float(user[1])
                 messages = min(int(user[2]),  message_history)
@@ -140,7 +143,9 @@ async def check(ctx):
         text = str(ctx.message.content).replace(command_prefix + 'check', '').strip()
         analysis = TextBlob(text)
         message_score = 0.5 + analysis.sentiment.polarity * 0.5
-        if message_score > 0.67:
+        if if "hell yeah brother" in message.content.lower():
+            await ctx.send("Hell yeah brother")
+        elif message_score > 0.67:
             await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  I love it!".format(ctx.message, round(float(message_score)*100,2)))
         elif message_score < 0.33:
             await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  You should probably keep that to yourself.".format(ctx.message, round(float(message_score)*100,2)))
