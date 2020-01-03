@@ -4,6 +4,7 @@
         "version" : "1.0.0",
         "description" : "PositivityBot",
         "command_prefix" : "+",
-        "game" : ""
+        "game" : "",
+        "message_history" : "100"
     }
 }
