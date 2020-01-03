@@ -143,7 +143,7 @@ async def check(ctx):
         text = str(ctx.message.content).replace(command_prefix + 'check', '').strip()
         analysis = TextBlob(text)
         message_score = 0.5 + analysis.sentiment.polarity * 0.5
-        if if "hell yeah brother" in message.content.lower():
+        if "hell yeah brother" in message.content.lower():
             await ctx.send("Hell yeah brother")
         elif message_score > 0.67:
             await ctx.send("{0.author.mention} Your statement has a polarity of {1}%.  I love it!".format(ctx.message, round(float(message_score)*100,2)))
