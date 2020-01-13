@@ -2,12 +2,17 @@ import datetime
 import asyncio
 import traceback
 import json
+from enum import Enum
 
 import discord
 from discord.ext import commands
 from discord.utils import get
 import sqlite3
 from textblob import TextBlob
+
+class ScoreboardTypes(Enum):
+    leaders = 1
+    losers = 2
 
 with open('settings.json') as settings_file:
     settings = json.load(settings_file)
@@ -159,19 +164,7 @@ async def check(ctx):
 @client.command(pass_context=True, name='leaders')
 async def leaders(ctx):
     try:
-        if ctx.message.author == client.user or ctx.message.author.bot:
-            return
-        rank = 1
-        lines = []
-        cur.execute('SELECT id, score FROM users WHERE ignore = 0 ORDER BY 2 DESC LIMIT 10')
-        users = cur.fetchall()
-        for row in users:
-            user = get(client.get_all_members(), id=row[0])
-            lines.append('{0}. {1} - {2}%'.format(rank, user, round(float(row[1]) * 100, 2)))
-            rank+=1
-            if rank > 10:
-                break
-        await ctx.send("\n".join(lines))
+        await scoreboard(ctx, ScoreboardTypes.leaders)
     except Exception as e:
         print('leaders : ', e)
         pass
@@ -180,21 +173,38 @@ async def leaders(ctx):
 @client.command(pass_context=True, name='losers')
 async def losers(ctx):
     try:
+        await scoreboard(ctx, ScoreboardTypes.losers)
+    except Exception as e:
+        print('losers : ', e)
+        pass
+
+
+async def scoreboard(ctx, scoreboardType):
+    try:
         if ctx.message.author == client.user or ctx.message.author.bot:
             return
         rank = 1
         lines = []
-        cur.execute('SELECT id, score FROM users WHERE ignore = 0 ORDER BY 2 ASC LIMIT 10')
+        if scoreboardType == ScoreboardTypes.leaders:
+            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 DESC LIMIT 10')
+        elif scoreboardType == ScoreboardTypes.losers:
+            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 ASC LIMIT 10')
+        else:
+            return
         users = cur.fetchall()
+        embed = discord.Embed(title='Leaderboard', type='rich', color=0x77B255)
         for row in users:
             user = get(client.get_all_members(), id=row[0])
-            lines.append('{0}. {1} - {2}%'.format(rank, user, round(float(row[1]) * 100, 2)))
+            score = round(float(row[1]) * 100, 2)
+            lines.append('**{0}. {1} - {2}**'.format(rank, user.display_name, score))
             rank+=1
             if rank > 10:
                 break
-        await ctx.send("\n".join(lines))
+        embed.add_field(name='Players', value="\n".join(lines))
+        embed.set_footer(text='*Minimum 50 scored comments to be ranked.*')
+        await ctx.send(embed=embed)
     except Exception as e:
-        print('losers : ', e)
+        print('scoreboard : ', e)
         pass
 
 
