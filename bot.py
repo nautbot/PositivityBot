@@ -164,7 +164,7 @@ async def check(ctx):
 @client.command(pass_context=True, name='leaders')
 async def leaders(ctx):
     try:
-        await scoreboard(ScoreboardTypes.leaders)
+        await scoreboard(ctx, ScoreboardTypes.leaders)
     except Exception as e:
         print('leaders : ', e)
         pass
@@ -173,12 +173,13 @@ async def leaders(ctx):
 @client.command(pass_context=True, name='losers')
 async def losers(ctx):
     try:
-        await scoreboard(ScoreboardTypes.losers)
+        await scoreboard(ctx, ScoreboardTypes.losers)
     except Exception as e:
         print('losers : ', e)
         pass
 
-async def scoreboard(scoreboardType):
+
+async def scoreboard(ctx, scoreboardType):
     try:
         if ctx.message.author == client.user or ctx.message.author.bot:
             return
@@ -205,6 +206,7 @@ async def scoreboard(scoreboardType):
     except Exception as e:
         print('scoreboard : ', e)
         pass
+
 
 @client.command(pass_context=True, name='score')
 async def score(ctx):
