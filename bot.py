@@ -186,15 +186,17 @@ async def scoreboard(ctx, scoreboardType):
         rank = 1
         lines = []
         if scoreboardType == ScoreboardTypes.leaders:
-            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 DESC LIMIT 10')
+            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 DESC')
         elif scoreboardType == ScoreboardTypes.losers:
-            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 ASC LIMIT 10')
+            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 ASC')
         else:
             return
         users = cur.fetchall()
         embed = discord.Embed(title='Leaderboard', type='rich', color=0x77B255)
         for row in users:
             user = get(client.get_all_members(), id=row[0])
+            if user is None:
+                continue
             score = round(float(row[1]) * 100, 2)
             lines.append('**{0}. {1} - {2}**'.format(rank, user.display_name, score))
             rank+=1
