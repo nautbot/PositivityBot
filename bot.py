@@ -2,6 +2,7 @@ import datetime
 import asyncio
 import traceback
 import json
+import re
 from enum import Enum
 
 import discord
@@ -9,6 +10,10 @@ from discord.ext import commands
 from discord.utils import get
 import sqlite3
 from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from twitter_scraper import get_tweets
+import requests
+from POSifiedText import POSifiedText
 
 class ScoreboardTypes(Enum):
     leaders = 1
@@ -23,6 +28,8 @@ cur = sql.cursor()
 cur.execute('CREATE TABLE IF NOT EXISTS users(id INTEGER, score FLOAT, messages INTEGER, ignore BIT)')
 print('Loaded Users')
 sql.commit()
+
+analyzer = SentimentIntensityAnalyzer()
 
 username = settings["discord"]["description"]
 version = settings["discord"]["version"]
@@ -113,6 +120,7 @@ async def on_ready():
 async def on_message(message):
     # =(running score * (100 - comment count) / 100) + (message score * comment count / 100)
     try:
+        message_score = 0
         if message.author == client.user or message.author.bot:
             return
         if not message.content.startswith(command_prefix):
@@ -120,16 +128,22 @@ async def on_message(message):
             user = cur.fetchone()
             if int(user[0]) != 0 and int(user[3]) != 0:
                 return
-            analysis = TextBlob(message.content)
+            # analysis = TextBlob(message.content)
+            sentiment_dictionary = analyzer.polarity_scores(message.content)
+            message_score = float(sentiment_dictionary['compound'])
             if "hell yeah brother" in message.content.lower():
                 message_score = 1
+            # elif (analysis.sentiment.polarity != 0):
+            #     message_score = 0.5 + analysis.sentiment.polarity * 0.5
+            elif (message_score != 0):
+                message_score = 0.5 + message_score * 0.5
             else:
-                message_score = 0.5 + analysis.sentiment.polarity * 0.5
+                return
             if int(user[0]) != 0:
                 running_score = float(user[1])
-                messages = min(int(user[2]),  message_history)
+                messages = min(int(user[2]) + 1,  message_history)
                 new_score = (running_score * ((messages - 1) / messages)) + (message_score / messages)
-                cur.execute('UPDATE users SET score = ?, messages = ? WHERE id=?', (new_score, min(messages + 1, message_history), message.author.id))
+                cur.execute('UPDATE users SET score = ?, messages = ? WHERE id=?', (new_score, min(messages, message_history), message.author.id))
             else:
                 cur.execute('INSERT INTO users VALUES(?,?,1,0)', (message.author.id, message_score))
             sql.commit()
@@ -146,8 +160,11 @@ async def check(ctx):
         if ctx.message.author == client.user or ctx.message.author.bot:
             return
         text = str(ctx.message.content).replace(command_prefix + 'check', '').strip()
-        analysis = TextBlob(text)
-        message_score = 0.5 + analysis.sentiment.polarity * 0.5
+        sentiment_dict = analyzer.polarity_scores(ctx.message.content)
+        message_score = sentiment_dict['compound']
+        message_score = 0.5 + message_score * 0.5
+        # analysis = TextBlob(text)
+        # message_score = 0.5 + analysis.sentiment.polarity * 0.5
         if "hell yeah brother" in ctx.message.content.lower():
             await ctx.send("Hell yeah brother")
         elif message_score > 0.67:
@@ -159,6 +176,57 @@ async def check(ctx):
     except Exception as e:
         print('on_message : ', e)
         pass
+
+
+@client.command(pass_context=True, name='markov')
+async def markov(ctx):
+    if ctx.message.author == client.user or ctx.message.author.bot:
+        return
+    argument = ctx.message.content.split(' ', 2)[1]
+    url = 'https://www.reddit.com/user/{0}/comments/.json?limit=100&sort=new'.format(argument)
+    headers = {'User-agent': '{} - {}'.format(username, version)}
+    r = requests.get(url, headers=headers)
+    raw = r.json()
+    try:
+        if str(raw['message']).lower() == "not found":
+            await ctx.send('{0.author.mention} {1}'.format(ctx.message, 'User not found.'))
+            return
+    except:
+        pass
+    corpus = []
+    for item in raw['data']['children']:
+        try:
+            corpus.append('. '.join(re.split(r'\s*\n\s*', str(item['data']['body']))))
+        except:
+            pass
+    text_model = POSifiedText(corpus)
+    reply = ''
+    sentence = text_model.make_sentence(tries=100)
+    if sentence:
+        reply = '{0.author.mention} {1}'.format(ctx.message, sentence)
+        await ctx.send(reply)
+    else:
+        await ctx.send('{0.author.mention} {1}'.format(ctx.message, 'Unable to build text chain.'))
+    await asyncio.sleep(2)
+
+
+@client.command(pass_context=True, name='twmarkov')
+async def twmarkov(ctx):
+    if ctx.message.author == client.user or ctx.message.author.bot:
+        return
+    argument = ctx.message.content.split(' ', 2)[1]
+    print(argument)
+    corpus = [t['text'] for t in get_tweets(argument, pages=2)]
+    print(corpus)
+    await asyncio.sleep(1)
+    text_model = POSifiedText('\n'.join(corpus))
+    await asyncio.sleep(1)
+    sentence = text_model.make_sentence(tries=100)
+    await asyncio.sleep(1)
+    if sentence:
+        await ctx.send('{0.author.mention} {1}'.format(ctx.message, sentence))
+    else:
+        await ctx.send('{0.author.mention} {1}'.format(ctx.message, 'Unable to build text chain.'))
 
 
 @client.command(pass_context=True, name='leaders')
@@ -186,20 +254,26 @@ async def scoreboard(ctx, scoreboardType):
         rank = 1
         lines = []
         if scoreboardType == ScoreboardTypes.leaders:
-            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 DESC LIMIT 10')
+            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 DESC LIMIT 10;')
         elif scoreboardType == ScoreboardTypes.losers:
-            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 ASC LIMIT 10')
+            cur.execute('SELECT id, score FROM users WHERE messages >= 50 AND ignore = 0 ORDER BY 2 ASC LIMIT 10;')
         else:
             return
         users = cur.fetchall()
-        embed = discord.Embed(title='Leaderboard', type='rich', color=0x77B255)
+        embed = discord.Embed(title='Leaderboard', type='rich', colour=0x77B255)
         for row in users:
-            user = get(client.get_all_members(), id=row[0])
+            # user = get(client.get_all_members(), id=row[0])
+            user = await client.fetch_user(row[0])
+            # print(user)
+            if user is None:
+                # print('continue')
+                continue
             score = round(float(row[1]) * 100, 2)
-            lines.append('**{0}. {1} - {2}**'.format(rank, user.display_name, score))
+            lines.append('**{0}. {1} - {2}**'.format(rank, user.name, score))
+            # print('**{0}. {1} - {2}**'.format(rank, user.display_name, score))
             rank+=1
-            if rank > 10:
-                break
+            # if rank > 10:
+            #     break
         embed.add_field(name='Players', value="\n".join(lines))
         embed.set_footer(text='*Minimum 50 scored comments to be ranked.*')
         await ctx.send(embed=embed)
@@ -289,24 +363,24 @@ async def hell_yeah_brother(ctx):
         pass
 
 
-@client.command(pass_context=True, name='reset')
-async def reset(ctx):
-    try:
-        return
-        if ctx.message.author == client.user or ctx.message.author.bot:
-            return
-        cur.execute('SELECT count(*), ignore from users where id=?', (ctx.message.author.id,))
-        user = cur.fetchone()
-        if int(user[0]) != 0:
-            cur.execute('UPDATE users SET score = 0, messages = 0 WHERE id=?', (ctx.message.author.id,))
-        else:
-            cur.execute('INSERT INTO users VALUES(?,0,0,0)', (ctx.message.author.id,))
-        sql.commit()
-        cur.execute('VACUUM')
-        await ctx.send("Okay {0.author.mention}, you have a clean slate!".format(ctx.message))
-    except Exception as e:
-        print('reset : ', e)
-        pass
+# @client.command(pass_context=True, name='reset')
+# async def reset(ctx):
+#     try:
+#         return
+#         if ctx.message.author == client.user or ctx.message.author.bot:
+#             return
+#         cur.execute('SELECT count(*), ignore from users where id=?', (ctx.message.author.id,))
+#         user = cur.fetchone()
+#         if int(user[0]) != 0:
+#             cur.execute('UPDATE users SET score = 0, messages = 0 WHERE id=?', (ctx.message.author.id,))
+#         else:
+#             cur.execute('INSERT INTO users VALUES(?,0,0,0)', (ctx.message.author.id,))
+#         sql.commit()
+#         cur.execute('VACUUM')
+#         await ctx.send("Okay {0.author.mention}, you have a clean slate!".format(ctx.message))
+#     except Exception as e:
+#         print('reset : ', e)
+#         pass
 
 
 client.run(settings["discord"]["client_token"])
